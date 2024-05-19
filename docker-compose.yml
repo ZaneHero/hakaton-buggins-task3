@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   app:
-    image: your-docker-hub-username/your-repo-name:latest
+    image: serf1r/hakaton:latest
     ports:
       - "8000:8000"
     environment:
