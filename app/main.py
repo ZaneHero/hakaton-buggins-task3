@@ -1,22 +1,58 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
 import os
 import pickle
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request as GoogleRequest
+from googleapiclient.discovery import build
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
 # Путь к вашему файлу client_secret.json
-CLIENT_SECRET_FILE = 'path/to/credentials.json'
+CLIENT_SECRET_FILE = 'credentials.json'
 SCOPES = [
     'https://www.googleapis.com/auth/admin.directory.group.readonly',
     'https://www.googleapis.com/auth/drive'
 ]
 
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Google API FastAPI application"}
+
+@app.get("/authenticate")
 def authenticate():
+    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
+    flow.redirect_uri = 'http://localhost:8000/oauth2callback'
+    auth_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
+    
+    # Сохранение состояния в файл, чтобы использовать его в обратном вызове
+    with open('state.pkl', 'wb') as f:
+        pickle.dump(state, f)
+
+    return RedirectResponse(auth_url)
+
+@app.get("/oauth2callback")
+def oauth2callback(request: Request):
+    # Загрузка состояния из файла
+    with open('state.pkl', 'rb') as f:
+        state = pickle.load(f)
+    
+    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES, state=state)
+    flow.redirect_uri = 'http://localhost:8000/oauth2callback'
+    
+    # Получение авторизационного кода из запроса
+    authorization_response = str(request.url)
+    flow.fetch_token(authorization_response=authorization_response)
+
+    creds = flow.credentials
+    # Сохранение учетных данных для следующего выполнения
+    with open('token.pickle', 'wb') as token:
+        pickle.dump(creds, token)
+
+    return {"message": "Authentication successful! You can now use the API endpoints."}
+
+def get_credentials():
     creds = None
     # Файл token.pickle хранит токены доступа и обновления пользователя, создается автоматически при первом выполнении
     if os.path.exists('token.pickle'):
@@ -24,23 +60,16 @@ def authenticate():
             creds = pickle.load(token)
     # Если нет допустимых учетных данных, запрашиваем их у пользователя
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Сохраняем учетные данные для следующего выполнения
+        raise HTTPException(status_code=401, detail="The user is not authenticated. Please authenticate first.")
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(GoogleRequest())
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
     return creds
 
-@app.get("/")
-def read_root():
-    return {"message": "Hello, иуи!"}
-
 @app.get("/groups")
 def list_google_groups():
-    creds = authenticate()
+    creds = get_credentials()
     service = build('admin', 'directory_v1', credentials=creds)
     groups = []
     page_token = None
@@ -59,7 +88,7 @@ def list_google_groups():
 
 @app.get("/untransferred_documents")
 def list_untransferred_documents(folder_id: str, company_email: str):
-    creds = authenticate()
+    creds = get_credentials()
     drive_service = build('drive', 'v3', credentials=creds)
     results = []
     page_token = None
@@ -88,7 +117,7 @@ def list_untransferred_documents(folder_id: str, company_email: str):
 
 @app.post("/copy_documents_by_owner")
 def copy_documents_by_owner(folder_id: str, owner_email: str):
-    creds = authenticate()
+    creds = get_credentials()
     drive_service = build('drive', 'v3', credentials=creds)
     page_token = None
     copied_files = []
@@ -112,7 +141,7 @@ def copy_documents_by_owner(folder_id: str, owner_email: str):
 
 @app.post("/accept_ownership_transfers")
 def accept_ownership_transfers(folder_id: str):
-    creds = authenticate()
+    creds = get_credentials()
     drive_service = build('drive', 'v3', credentials=creds)
     page_token = None
     accepted_files = []
@@ -136,4 +165,3 @@ def accept_ownership_transfers(folder_id: str):
             break
 
     return JSONResponse(content={"accepted_files": accepted_files})
-
