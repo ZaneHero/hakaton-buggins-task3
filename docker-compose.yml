@@ -1,0 +1,85 @@
+version: '3.7'
+
+services:
+  app:
+    image: your-docker-hub-username/your-repo-name:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/yourdb
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: yourdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d yourdb"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      app:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+
+  cadvisor:
+    image: google/cadvisor:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  vmstorage:
+    image: victoriametrics/vmstorage
+    ports:
+      - "8400:8400"
+      - "8401:8401"
+    volumes:
+      - vmstorage_data:/victoria-metrics-data
+
+  vminsert:
+    image: victoriametrics/vminsert
+    ports:
+      - "8480:8480"
+      - "8481:8481"
+    environment:
+      - VMINDEX_ADDR=vmstorage:8400
+
+  vmselect:
+    image: victoriametrics/vmselect
+    ports:
+      - "8481:8481"
+    environment:
+      - VMINDEX_ADDR=vmstorage:8400
+
+volumes:
+  postgres_data:
+  vmstorage_data:
