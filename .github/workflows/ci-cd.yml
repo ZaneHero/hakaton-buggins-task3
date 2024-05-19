@@ -50,7 +50,7 @@ jobs:
       run: |
         ssh root@77.221.159.69 << 'EOF'
           cd ~/project
-          docker-compose pull
-          docker-compose up -d
-          docker-compose exec -T app alembic upgrade head
+          docker compose pull
+          docker compose up -d
+          docker compose exec -T app alembic upgrade head
         EOF
