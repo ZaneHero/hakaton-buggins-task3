@@ -5,3 +5,7 @@ __pycache__
 token.pickle
 credentials.json
 state.pkl
+token.json
+screenshot.png
+cookies.pkl
+client_secrets.json

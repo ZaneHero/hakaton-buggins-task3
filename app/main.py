@@ -1,167 +1,174 @@
-import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import time
+import logging
+import csv
 import pickle
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request as GoogleRequest
-from googleapiclient.discovery import build
-from datetime import datetime, timedelta
+import os
 
+logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 
-# Путь к вашему файлу client_secret.json
-CLIENT_SECRET_FILE = 'credentials.json'
-SCOPES = [
-    'https://www.googleapis.com/auth/admin.directory.group.readonly',
-    'https://www.googleapis.com/auth/drive'
-]
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the Google API FastAPI application"}
+def save_to_csv(groups, file_path):
+    keys = groups[0].keys()
+    with open(file_path, 'w', newline='') as output_file:
+        dict_writer = csv.DictWriter(output_file, fieldnames=keys)
+        dict_writer.writeheader()
+        dict_writer.writerows(groups)
+    logging.info(f"Groups saved to {file_path}")
 
-@app.get("/authenticate")
-def authenticate():
-    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
-    flow.redirect_uri = 'http://localhost:8000/oauth2callback'
-    auth_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
-    
-    # Сохранение состояния в файл, чтобы использовать его в обратном вызове
-    with open('state.pkl', 'wb') as f:
-        pickle.dump(state, f)
+def authenticate_and_save_cookies(email, password):
+    service = Service(ChromeDriverManager().install())
+    options = webdriver.ChromeOptions()
+    # options.add_argument("--headless")  # Уберите headless для отладки
+    options.add_argument("--disable-dev-shm-usage")
 
-    return RedirectResponse(auth_url)
+    driver = webdriver.Chrome(service=service, options=options)
+    logging.info("Chrome driver initialized.")
 
-@app.get("/oauth2callback")
-def oauth2callback(request: Request):
-    # Загрузка состояния из файла
-    with open('state.pkl', 'rb') as f:
-        state = pickle.load(f)
-    
-    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES, state=state)
-    flow.redirect_uri = 'http://localhost:8000/oauth2callback'
-    
-    # Получение авторизационного кода из запроса
-    authorization_response = str(request.url)
-    flow.fetch_token(authorization_response=authorization_response)
+    try:
+        # Авторизация в Google-аккаунте
+        driver.get("https://accounts.google.com/signin")
+        logging.info("Navigating to Google Sign-In page")
+        wait = WebDriverWait(driver, 30)
+        
+        email_input = wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
+        email_input.send_keys(email)
+        email_input.send_keys(Keys.RETURN)
+        logging.info("Email entered.")
+        time.sleep(2)
 
-    creds = flow.credentials
-    # Сохранение учетных данных для следующего выполнения
-    with open('token.pickle', 'wb') as token:
-        pickle.dump(creds, token)
+        password_input = wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='password']")))
+        password_input.send_keys(password)
+        password_input.send_keys(Keys.RETURN)
+        logging.info("Password entered.")
+        time.sleep(5)
 
-    return {"message": "Authentication successful! You can now use the API endpoints."}
+        # Переход на страницу групп для установки домена
+        driver.get("https://groups.google.com/u/1/my-groups")
+        time.sleep(5)
 
-def get_credentials():
-    creds = None
-    # Файл token.pickle хранит токены доступа и обновления пользователя, создается автоматически при первом выполнении
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    # Если нет допустимых учетных данных, запрашиваем их у пользователя
-    if not creds or not creds.valid:
-        raise HTTPException(status_code=401, detail="The user is not authenticated. Please authenticate first.")
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(GoogleRequest())
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-    return creds
+        # Сохранение куки после успешной авторизации
+        cookies = driver.get_cookies()
+        cookies_path = "cookies.pkl"
+        with open(cookies_path, 'wb') as f:
+            pickle.dump(cookies, f)
+        logging.info(f"Cookies saved to {cookies_path}")
 
-@app.get("/groups")
-def list_google_groups():
-    creds = get_credentials()
-    service = build('admin', 'directory_v1', credentials=creds)
-    groups = []
-    page_token = None
+        return cookies_path
+    finally:
+        driver.quit()
+        logging.info("Chrome driver quit.")
 
-    while True:
-        try:
-            results = service.groups().list(customer='my_customer', pageToken=page_token).execute()
-            groups.extend(results.get('groups', []))
-            page_token = results.get('nextPageToken')
-            if not page_token:
-                break
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+def parse_groups_with_cookies(cookies_path):
+    service = Service(ChromeDriverManager().install())
+    options = webdriver.ChromeOptions()
+    # options.add_argument("--headless")  # Уберите headless для отладки
+    options.add_argument("--disable-dev-shm-usage")
 
-    return JSONResponse(content=groups)
+    driver = webdriver.Chrome(service=service, options=options)
+    logging.info("Chrome driver initialized.")
 
-@app.get("/untransferred_documents")
-def list_untransferred_documents(folder_id: str, company_email: str):
-    creds = get_credentials()
-    drive_service = build('drive', 'v3', credentials=creds)
-    results = []
-    page_token = None
-    seven_days_ago = datetime.now() - timedelta(days=7)
+    try:
+        # Загрузка страницы для установки домена куки
+        driver.get("https://groups.google.com/u/1/my-groups")
+        time.sleep(5)
 
-    while True:
-        response = drive_service.files().list(q=f"'{folder_id}' in parents and trashed=false",
-                                              fields="nextPageToken, files(id, name, owners, createdTime)",
-                                              pageToken=page_token).execute()
-        for file in response.get('files', []):
-            created_time = datetime.strptime(file['createdTime'], '%Y-%m-%dT%H:%M:%S.%fZ')
-            if created_time < seven_days_ago:
-                owner_email = file['owners'][0]['emailAddress']
-                if owner_email != company_email:
-                    results.append({
-                        'name': file['name'],
-                        'owner': owner_email,
-                        'createdDate': created_time
-                    })
+        # Загрузка куки
+        with open(cookies_path, 'rb') as f:
+            cookies = pickle.load(f)
+            for cookie in cookies:
+                # Удаляем 'expiry' если она есть, т.к. она мешает установке куки
+                if 'expiry' in cookie:
+                    del cookie['expiry']
+                driver.add_cookie(cookie)
+        logging.info("Cookies loaded into the browser.")
 
-        page_token = response.get('nextPageToken', None)
-        if page_token is None:
-            break
+        # Переход на страницу групп после загрузки куки
+        driver.get("https://groups.google.com/u/1/my-groups")
+        logging.info("Navigated to Google Groups.")
+        time.sleep(10)  # Увеличено время ожидания загрузки страницы
 
-    return JSONResponse(content=results)
+        # Снимок экрана перед попыткой найти элементы
+        screenshot_path = "screenshot.png"
+        driver.save_screenshot(screenshot_path)
+        logging.info(f"Screenshot saved to {screenshot_path}")
 
-@app.post("/copy_documents_by_owner")
-def copy_documents_by_owner(folder_id: str, owner_email: str):
-    creds = get_credentials()
-    drive_service = build('drive', 'v3', credentials=creds)
-    page_token = None
-    copied_files = []
+        # Проверка загрузки страницы групп
+        if "my-groups" not in driver.current_url:
+            raise Exception("Failed to load Google Groups page")
 
-    while True:
-        response = drive_service.files().list(q=f"'{folder_id}' in parents and trashed=false",
-                                              fields="nextPageToken, files(id, name, owners)",
-                                              pageToken=page_token).execute()
-        for file in response.get('files', []):
-            if file['owners'][0]['emailAddress'] == owner_email:
-                copy = drive_service.files().copy(fileId=file['id'], body={'name': f"Copy of {file['name']}"}).execute()
-                drive_service.permissions().create(fileId=copy['id'],
-                                                   body={'role': 'owner', 'type': 'user', 'emailAddress': creds.service_account_email}).execute()
-                copied_files.append(copy['name'])
+        # Парсинг названий групп
+        wait = WebDriverWait(driver, 30)
+        group_elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//a[contains(@href, './g/') and .//div[contains(text(), 'Отдел')]]")))
 
-        page_token = response.get('nextPageToken', None)
-        if page_token is None:
-            break
+        # Парсинг данных
+        groups = []
+        for group_element in group_elements:
+            group_name = group_element.text
+            group_href = group_element.get_attribute("href")
+            group_info = {
+                "group_name": group_name,
+                "group_href": group_href,
+            }
+            groups.append(group_info)
 
-    return JSONResponse(content={"copied_files": copied_files})
+        # Сохранение данных в CSV файл
+        if groups:
+            save_to_csv(groups, 'groups.csv')
+        else:
+            logging.error("No groups found to save.")
 
-@app.post("/accept_ownership_transfers")
-def accept_ownership_transfers(folder_id: str):
-    creds = get_credentials()
-    drive_service = build('drive', 'v3', credentials=creds)
-    page_token = None
-    accepted_files = []
+        return groups
+    finally:
+        driver.quit()
+        logging.info("Chrome driver quit.")
 
-    while True:
-        response = drive_service.files().list(q=f"'{folder_id}' in parents and trashed=false",
-                                              fields="nextPageToken, files(id, name, owners, permissions)",
-                                              pageToken=page_token).execute()
-        for file in response.get('files', []):
-            for permission in file.get('permissions', []):
-                if permission.get('role') == 'owner' and permission.get('pendingOwner'):
-                    try:
-                        drive_service.permissions().update(fileId=file['id'], permissionId=permission['id'],
-                                                           body={'role': 'owner'}, transferOwnership=True).execute()
-                        accepted_files.append(file['name'])
-                    except Exception as e:
-                        print(f"Error accepting ownership for file: {file['name']} - {str(e)}")
+async def background_authenticate_task(email, password):
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as pool:
+        cookies_path = await loop.run_in_executor(pool, authenticate_and_save_cookies, email, password)
+        return cookies_path
 
-        page_token = response.get('nextPageToken', None)
-        if page_token is None:
-            break
+async def background_parse_task(cookies_path):
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as pool:
+        groups = await loop.run_in_executor(pool, parse_groups_with_cookies, cookies_path)
+        return groups
 
-    return JSONResponse(content={"accepted_files": accepted_files})
+@app.post("/authenticate/")
+async def authenticate(request: LoginRequest):
+    try:
+        cookies_path = await background_authenticate_task(request.email, request.password)
+        return {"message": "Authentication successful, cookies saved.", "cookies_path": cookies_path}
+    except Exception as e:
+        logging.error(f"Error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/parse-groups/")
+async def parse_groups():
+    try:
+        cookies_path = "cookies.pkl"  # Загрузка куки из сохраненного файла
+        if not os.path.exists(cookies_path):
+            raise HTTPException(status_code=400, detail="No cookies found. Please authenticate first.")
+        groups = await background_parse_task(cookies_path)
+        return {"groups": groups}
+    except Exception as e:
+        logging.error(f"Error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Запуск приложения
+# Запуск: uvicorn main:app --reload
