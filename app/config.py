@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     def DATABASE_URL(self):
         user = f'{self.DB_USER}:{self.DB_PASS}'
         database = f'{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}'
-        print ('SPETMAAAAAAAAAAAA------------------------AAAAAAAAAAAAAAA', database)
         return f'postgresql+asyncpg://{user}@{database}'
     
 

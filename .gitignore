@@ -1,3 +1,7 @@
 .test
 venv
 .env
+__pycache__
+token.pickle
+credentials.json
+state.pkl
