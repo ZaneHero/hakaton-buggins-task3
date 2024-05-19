@@ -38,15 +38,19 @@ jobs:
       uses: webfactory/ssh-agent@v0.5.3
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+    
+    - name: Add server to known_hosts
+      run: |
+        ssh-keyscan -H 77.221.159.69 >> ~/.ssh/known_hosts
 
     - name: Copy docker-compose.yml to server
-      run: scp docker-compose.yml root@77.221.159.69:/path/to/your/app
+      run: scp docker-compose.yml root@77.221.159.69:~/project
 
     - name: Pull and run Docker image on server
       run: |
         ssh root@77.221.159.69 << 'EOF'
-          cd /path/to/your/app
-          docker-compose pull
-          docker-compose up -d
-          docker-compose exec -T app alembic upgrade head
+          cd ~/project
+          docker compose pull
+          docker compose up -d
+          docker compose exec -T app alembic upgrade head
         EOF

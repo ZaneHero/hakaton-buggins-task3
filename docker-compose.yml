@@ -6,26 +6,28 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/yourdb
+      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   db:
     image: postgres:13
+    ports:
+      - "5432:5432"
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: yourdb
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: hakaton
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d yourdb"]
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${POSTGRES_DB}"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -68,15 +70,15 @@ services:
   vminsert:
     image: victoriametrics/vminsert
     ports:
-      - "8480:8480"
-      - "8481:8481"
+      - "8490:8480"
+      - "8491:8481"
     environment:
       - VMINDEX_ADDR=vmstorage:8400
 
   vmselect:
     image: victoriametrics/vmselect
     ports:
-      - "8481:8481"
+      - "8492:8481"
     environment:
       - VMINDEX_ADDR=vmstorage:8400
 
