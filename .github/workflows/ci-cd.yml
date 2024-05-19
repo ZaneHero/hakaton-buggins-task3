@@ -38,6 +38,10 @@ jobs:
       uses: webfactory/ssh-agent@v0.5.3
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+    
+    - name: Add server to known_hosts
+      run: |
+        ssh-keyscan -H 77.221.159.69 >> ~/.ssh/known_hosts
 
     - name: Copy docker-compose.yml to server
       run: scp docker-compose.yml root@77.221.159.69:~/project
