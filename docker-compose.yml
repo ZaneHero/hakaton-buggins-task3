@@ -1,87 +1,76 @@
-version: '3.7'
+version: '3.8'
 
 services:
-  app:
-    image: serf1r/hakaton:latest
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@db:5432/${POSTGRES_DB}
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  cadvisor:
+    image: google/cadvisor:latest
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    command:
+      - "--disable_metrics=tcp,udp,sched"
 
   db:
     image: postgres:13
-    ports:
-      - "5432:5432"
     environment:
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-      POSTGRES_DB: hakaton
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d hakaton"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    depends_on:
-      app:
-        condition: service_healthy
-      db:
-        condition: service_healthy
-
-  node-exporter:
-    image: prom/node-exporter
-    ports:
-      - "9100:9100"
-
-  cadvisor:
-    image: google/cadvisor:latest
-    ports:
-      - "8080:8080"
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:rw
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
 
   vmstorage:
-    image: victoriametrics/vmstorage
-    ports:
-      - "8400:8400"
-      - "8401:8401"
+    image: victoriametrics/vmstorage:v1.85.2-cluster
+    command: -retentionPeriod=3 -storageDataPath=/storage
     volumes:
-      - vmstorage_data:/victoria-metrics-data
+      - storage:/storage
+    restart: unless-stopped
 
   vminsert:
-    image: victoriametrics/vminsert
+    image: victoriametrics/vminsert:v1.85.2-cluster
+    command:
+      - -storageNode=vmstorage:8401
     ports:
-      - "8490:8480"
-      - "8491:8481"
-    environment:
-      - VMINDEX_ADDR=vmstorage:8400
+      - 8480:8480
+    restart: unless-stopped
 
   vmselect:
-    image: victoriametrics/vmselect
+    image: victoriametrics/vmselect:v1.85.2-cluster
+    command:
+      - -storageNode=vmstorage:8401
     ports:
-      - "8492:8481"
+      - 8481:8481
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - 9100:9100
+    restart: unless-stopped
+
+  app:
+    image: serf1r/hakaton:latest
+    ports:
+      - 8000:8000
     environment:
-      - VMINDEX_ADDR=vmstorage:8400
+      - DATABASE_URL=postgresql://user:password@db/mydatabase
+    depends_on:
+      - db
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
-  vmstorage_data:
+  db_data:
+  storage:
