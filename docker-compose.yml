@@ -3,11 +3,13 @@ version: '3.8'
 services:
   cadvisor:
     image: google/cadvisor:latest
+    privileged: true
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+      - /cgroup:/cgroup:ro
     restart: unless-stopped
     command:
       - "--disable_metrics=tcp,udp,sched"
@@ -61,6 +63,17 @@ services:
       - 9100:9100
     restart: unless-stopped
 
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - 3000:3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
   app:
     image: serf1r/hakaton:latest
     ports:
@@ -74,3 +87,4 @@ services:
 volumes:
   db_data:
   storage:
+  grafana_data:
