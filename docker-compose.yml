@@ -95,4 +95,6 @@ volumes:
   db_data:
   storage:
   grafana_data:
+  client_secrets:
+  credentials:
 
