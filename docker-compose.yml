@@ -25,9 +25,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
-    networks:
-      - db_network
-
+    
   vmstorage:
     image: victoriametrics/vmstorage:v1.85.2-cluster
     command: -retentionPeriod=3 -storageDataPath=/storage
@@ -84,6 +82,8 @@ services:
       - PROMETHEUS_MULTIPROC_DIR=/tmp
     volumes:
       - /tmp:/tmp
+      - ./credentials.json:~/project/credentials.json
+      - ./client_secrets.json:~/project/client_secrets.json
     ports:
       - 8000:8000
     restart: unless-stopped
@@ -92,7 +92,4 @@ volumes:
   db_data:
   storage:
   grafana_data:
-  
-networks:
-  db_network:
-    driver: bridge
+
