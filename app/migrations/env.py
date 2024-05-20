@@ -10,6 +10,7 @@ sys.path.insert(0, dirname(dirname(dirname(abspath(__file__)))))
 
 from app.database import Base, DATABASE_URL
 from app.test_models.models import TestTable
+from app.groups.models import Groups
 
 
 # this is the Alembic Config object, which provides
