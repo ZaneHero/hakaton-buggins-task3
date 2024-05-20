@@ -276,7 +276,7 @@ async def get_email_id():
 scheduler = AsyncIOScheduler()
 
 # Добавление задачи в планировщик
-@scheduler.scheduled_job('interval', minutes=20)
+@scheduler.scheduled_job('interval', minutes=1)
 def scheduled_job():
     check_and_process_emails()
 
