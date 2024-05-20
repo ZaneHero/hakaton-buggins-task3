@@ -80,6 +80,7 @@ services:
     image: serf1r/hakaton:latest
     environment:
       - PROMETHEUS_MULTIPROC_DIR=/tmp
+      - PYTHONUNBUFFERED=1
     volumes:
       - /tmp:/tmp
       - ./credentials.json:/app/credentials/credentials.json
