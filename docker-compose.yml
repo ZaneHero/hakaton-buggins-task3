@@ -87,6 +87,7 @@ services:
       - /tmp:/tmp
       - ./credentials.json:/root/project/credentials.json
       - ./client_secrets.json:/root/project/client_secrets.json
+    working_dir: /root/project
     ports:
       - 8000:8000
     restart: unless-stopped
@@ -95,6 +96,4 @@ volumes:
   db_data:
   storage:
   grafana_data:
-  client_secrets:
-  credentials:
 
