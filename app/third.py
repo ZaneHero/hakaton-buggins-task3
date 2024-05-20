@@ -5,6 +5,7 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import os
 import json
 import logging
@@ -20,6 +21,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -130,86 +132,6 @@ async def authorize():
     authorization_url, _ = flow.authorization_url(prompt='consent')
     return RedirectResponse(authorization_url)
 
-@app.get("/callback")
-async def oauth2_callback(request: Request):
-    code = request.query_params.get('code')
-    try:
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
-        save_credentials(credentials)
-        return JSONResponse({"message": "Authorization successful."})
-    except Exception as e:
-        logger.error(f"Error during OAuth callback: {e}")
-        raise HTTPException(status_code=400, detail="Authorization failed")
-
-@app.get("/files")
-async def list_files():
-    credentials = load_credentials()
-    if not credentials or not credentials.valid:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    try:
-        service = build('drive', 'v3', credentials=credentials, cache_discovery=False)
-        # Ищем начальную папку
-        response = service.files().list(
-            q="name='Baggins Coffee' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-            fields="files(id, name)"
-        ).execute()
-        root_folder = response.get('files', [])
-        if not root_folder:
-            raise HTTPException(status_code=404, detail="Baggins Coffee folder not found")
-        
-        root_folder_id = root_folder[0]['id']
-        all_files = list_all_files(service, root_folder_id)
-
-        if not all_files:
-            return {"files": []}
-
-        one_hour_ago = datetime.utcnow() - timedelta(minutes=20)
-        kolomojcysuai_email = 'kolomojcysuai@gmail.com'
-        
-        files = []
-        for item in all_files:
-            created_time = datetime.strptime(item['createdTime'], "%Y-%m-%dT%H:%M:%S.%fZ")
-            if created_time < one_hour_ago:
-                owner_emails = [owner['emailAddress'] for owner in item.get('owners', [])]
-                if kolomojcysuai_email not in owner_emails:
-                    files.append({
-                        "id": item["id"],
-                        "name": item["name"],
-                        "createdTime": item["createdTime"],
-                        "owners": owner_emails
-                    })
-
-        return {"files": files}
-    except Exception as e:
-        logger.error(f"Error fetching files: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch files")
-
-@app.get("/file-hierarchy/{file_id}")
-async def get_file_hierarchy_route(file_id: str):
-    credentials = load_credentials()
-    if not credentials or not credentials.valid:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    try:
-        service = build('drive', 'v3', credentials=credentials, cache_discovery=False)
-        hierarchy = get_file_hierarchy(service, file_id)
-        return {"hierarchy": hierarchy}
-    except Exception as e:
-        logger.error(f"Error fetching file hierarchy: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch file hierarchy")
-
-def get_file_hierarchy(service, file_id):
-    """Возвращает иерархию папок для указанного файла."""
-    hierarchy = []
-    current_id = file_id
-    while current_id:
-        file = service.files().get(fileId=current_id, fields="id, name, parents").execute()
-        hierarchy.insert(0, {"id": file["id"], "name": file["name"]})
-        parents = file.get("parents")
-        current_id = parents[0] if parents else None
-    return hierarchy
 
 # Новый роутер для выполнения задачи с использованием imaplib и selenium
 @app.post("/check-emails/")
@@ -283,20 +205,47 @@ def accept_invitation(email_id):
         email_url = f"https://mail.google.com/mail/u/0/#inbox/{email_id}"
         driver.get(email_url)
         logger.info(f"Opened the email with ID {email_id}")
-        time.sleep(6)
+        time.sleep(2)
 
-     
-        accept_button = driver.find_element(By.XPATH, '//*[@id="submit-accept-button"]')
+        # Нахождение и нажатие кнопки "In new window" с использованием полного XPATH
+        new_window_button = wait.until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[7]/div[3]/div/div[2]/div[2]/div/div/div/div[2]/div/div[1]/div/div[2]/div/div[2]/div[1]/div/div[1]/div/span[4]/button/div')))
+        new_window_button.click()
+        time.sleep(1)  # Ожидание после нажатия
+        logger.info("Clicked the 'In new window' button.")
 
-        accept_button.click()
-        time.sleep(1)
-       
-        logger.info("Clicked the Accept button using JavaScript.")
+        # Переключение на новую вкладку
+        wait.until(EC.number_of_windows_to_be(2))  # Ожидание открытия второй вкладки
+        driver.switch_to.window(driver.window_handles[-1])  # Переключение на последнюю открытую вкладку
+        logger.info("Switched to new tab.")
+        time.sleep(2)
+
+        # Нахождение и нажатие кнопки "Responde" с использованием полного XPATH
+        respond_button = wait.until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[4]/div[2]/div/div[3]/div/div[2]/div[2]/div[1]/div/div[2]/div/div[3]/div[2]/div/div[3]/div/div/div/div/div/div[1]/div[2]/div[3]/div[3]/div[1]/div/table/tbody/tr/td/table/tbody/tr/td/table[1]/tbody/tr/td/div[2]/a')))
+        respond_button.click()
+        logger.info("Clicked the 'Responde' button.")
+        time.sleep(10)
+
+        # Ожидание открытия новой вкладки и переключение на неё
+        wait.until(EC.number_of_windows_to_be(2))  # Ожидание открытия новой вкладки
+        driver.switch_to.window(driver.window_handles[-1])  # Переключение на последнюю открытую вкладку
+        logger.info("Switched to new tab after clicking 'Responde'.")
+        time.sleep(2)
+
+        # Нахождение и нажатие кнопки "Done" с использованием полного XPATH
+        done_button = wait.until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[3]/div/div[2]/span/c-wiz/div/div/div/div/c-wiz/div/div/div/div/div/div/div[2]/div/div[2]/div/div[2]/div/div/div/div[3]/div/div/div[2]/div/div[2]/button[3]/span[5]')))
+        done_button.click()
+        logger.info("Clicked the 'Done' button.")
+        time.sleep(2)
+
     except Exception as e:
         logger.error(f"An error occurred while accepting the invitation: {e}")
     finally:
         driver.quit()
         logger.info("Chrome driver quit.")
+
+
+
+
 
 # Новый роутер для получения ID письма
 @app.get("/get-email-id/")
@@ -321,4 +270,17 @@ async def get_email_id():
         logger.error(f"An error occurred while fetching email ID: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch email ID")
 
-# Запуск приложения: uvicorn third:app --reload
+# Инициализация планировщика
+scheduler = AsyncIOScheduler()
+
+# Добавление задачи в планировщик
+@scheduler.scheduled_job('interval', minutes=20)
+def scheduled_job():
+    check_and_process_emails()
+
+# Запуск планировщика при старте приложения
+@app.on_event("startup")
+async def startup_event():
+    scheduler.start()
+
+# Запуск приложения: uvicorn main:app --reload
