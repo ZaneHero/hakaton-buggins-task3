@@ -78,6 +78,10 @@ services:
 
   app:
     image: serf1r/hakaton:latest
+    environment:
+      - PROMETHEUS_MULTIPROC_DIR=/tmp
+    volumes:
+      - /tmp:/tmp
     ports:
       - 8000:8000
     restart: unless-stopped
