@@ -44,7 +44,7 @@ fernet = Fernet(base64.urlsafe_b64encode(key))
 app = FastAPI()
 
 # Настройки OAuth 2.0
-CLIENT_SECRETS_FILE = "client_secrets.json"  # путь к вашему клиентскому секрету OAuth 2.0
+CLIENT_SECRETS_FILE = "client_secrets"  # путь к вашему клиентскому секрету OAuth 2.0
 SCOPES = ['https://www.googleapis.com/auth/drive']
 REDIRECT_URI = "http://localhost:8000/callback"
 
@@ -56,7 +56,7 @@ flow = Flow.from_client_secrets_file(
 )
 
 # Путь для хранения зашифрованных учетных данных
-CREDENTIALS_FILE = 'credentials.json'
+CREDENTIALS_FILE = 'credentials'
 
 def encrypt_data(data):
     return fernet.encrypt(json.dumps(data).encode()).decode()
