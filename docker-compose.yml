@@ -83,6 +83,8 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - GMAIL_USERNAME=${GMAIL_USERNAME}
       - GMAIL_PASSWORD=${GMAIL_PASSWORD}
+      - OAUTHLIB_INSECURE_TRANSPORT=1
+
     volumes:
       - /tmp:/tmp
       - /root/project/credentials.json:/root/project/credentials.json
