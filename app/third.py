@@ -232,7 +232,8 @@ def accept_invitation(email_id):
         time.sleep(5)
         x=400
         y=100
-        driver.execute_script(f"document.elementFromPoint({x}, {y}).click();")
+        actions = ActionChains(driver)
+        actions.move_by_offset(x, y).click().perform()
         logger.info("JsClicked")
 
         # iframe = wait.until(EC.presence_of_element_located((By.XPATH, "//iframe[contains(@class, 'share-client-content-iframe')]")))

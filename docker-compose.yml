@@ -80,6 +80,9 @@ services:
     image: serf1r/hakaton:latest
     environment:
       - PROMETHEUS_MULTIPROC_DIR=/tmp
+      - SECRET_KEY=${SECRET_KEY}
+      - GMAIL_USERNAME=${GMAIL_USERNAME}
+      - GMAIL_PASSWORD=${GMAIL_PASSWORD}
     volumes:
       - /tmp:/tmp
       - ./credentials.json:/app/credentials/credentials.json
