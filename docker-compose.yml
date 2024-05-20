@@ -81,6 +81,10 @@ services:
     environment:
       - PROMETHEUS_MULTIPROC_DIR=/tmp
       - PYTHONUNBUFFERED=1
+      - SECRET_KEY=${SECRET_KEY}
+      - GMAIL_USERNAME=${GMAIL_USERNAME}
+      - GMAIL_PASSWORD=${GMAIL_PASSWORD}
+      - OAUTHLIB_INSECURE_TRANSPORT=1
     volumes:
       - /tmp:/tmp
       - ./credentials.json:/app/credentials/credentials.json
