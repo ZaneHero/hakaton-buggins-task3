@@ -46,7 +46,7 @@ app = FastAPI()
 # Настройки OAuth 2.0
 CLIENT_SECRETS_FILE = "/root/project/client_secrets.json"  # путь к вашему клиентскому секрету OAuth 2.0
 SCOPES = ['https://www.googleapis.com/auth/drive']
-REDIRECT_URI = "http://77.221.159.69:8000/callback"
+REDIRECT_URI = "http://testing.lazy.delivery/callback"
 
 # Инициализация потока авторизации
 flow = Flow.from_client_secrets_file(
