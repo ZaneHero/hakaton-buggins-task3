@@ -85,9 +85,8 @@ services:
       - GMAIL_PASSWORD=${GMAIL_PASSWORD}
     volumes:
       - /tmp:/tmp
-      - ./credentials.json:/root/project/credentials.json
-      - ./client_secrets.json:/root/project/client_secrets.json
-    working_dir: /root/project
+      - /root/project/credentials.json:/root/project/credentials.json
+      - /root/project/client_secrets.json:/root/project/client_secrets.json
     ports:
       - 8000:8000
     restart: unless-stopped
