@@ -52,5 +52,5 @@ jobs:
           cd ~/project
           docker compose pull
           docker compose up -d
-          docker compose exec -T app alembic upgrade head
+          # docker compose exec -T app alembic upgrade head
         EOF

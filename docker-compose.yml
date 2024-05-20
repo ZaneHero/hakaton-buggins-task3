@@ -4,6 +4,8 @@ services:
   cadvisor:
     image: google/cadvisor:latest
     privileged: true
+    devices:
+      - /dev/kmsg
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -17,9 +19,9 @@ services:
   db:
     image: postgres:13
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mydatabase
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: hakaton
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -78,10 +80,6 @@ services:
     image: serf1r/hakaton:latest
     ports:
       - 8000:8000
-    environment:
-      - DATABASE_URL=postgresql://user:password@db/mydatabase
-    depends_on:
-      - db
     restart: unless-stopped
 
 volumes:
