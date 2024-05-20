@@ -25,6 +25,8 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - db_network
 
   vmstorage:
     image: victoriametrics/vmstorage:v1.85.2-cluster
@@ -90,3 +92,7 @@ volumes:
   db_data:
   storage:
   grafana_data:
+  
+networks:
+  db_network:
+    driver: bridge
