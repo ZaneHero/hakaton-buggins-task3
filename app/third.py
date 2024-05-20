@@ -229,13 +229,22 @@ def accept_invitation(email_id):
         wait.until(EC.number_of_windows_to_be(2))  # Ожидание открытия новой вкладки
         driver.switch_to.window(driver.window_handles[-1])  # Переключение на последнюю открытую вкладку
         logger.info("Switched to new tab after clicking 'Responde'.")
-        time.sleep(2)
+        time.sleep(5)
+        x=400
+        y=100
+        driver.execute_script(f"document.elementFromPoint({x}, {y}).click();")
+        logger.info("JsClicked")
 
-        # Нахождение и нажатие кнопки "Done" с использованием полного XPATH
-        done_button = wait.until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[3]/div/div[2]/span/c-wiz/div/div/div/div/c-wiz/div/div/div/div/div/div/div[2]/div/div[2]/div/div[2]/div/div/div/div[3]/div/div/div[2]/div/div[2]/button[3]/span[5]')))
-        done_button.click()
-        logger.info("Clicked the 'Done' button.")
-        time.sleep(2)
+        # iframe = wait.until(EC.presence_of_element_located((By.XPATH, "//iframe[contains(@class, 'share-client-content-iframe')]")))
+        # logger.info("Iframe got")
+        # driver.switch_to.frame(iframe)
+        # logger.info("Iframe switched")
+
+        # # Нахождение и нажатие кнопки "Done" с использованием полного XPATH
+        # done_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Accept')]")))
+        # done_button.click()                                            
+        # logger.info("Clicked the 'Done' button.")
+        # time.sleep(2)
 
     except Exception as e:
         logger.error(f"An error occurred while accepting the invitation: {e}")
@@ -274,7 +283,7 @@ async def get_email_id():
 scheduler = AsyncIOScheduler()
 
 # Добавление задачи в планировщик
-@scheduler.scheduled_job('interval', minutes=20)
+@scheduler.scheduled_job('interval', minutes=1)
 def scheduled_job():
     check_and_process_emails()
 
