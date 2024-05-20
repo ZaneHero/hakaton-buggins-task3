@@ -37,7 +37,7 @@ app = FastAPI()
 
 # Настройки OAuth 2.0
 CLIENT_SECRETS_FILE = "client_secrets.json"  # путь к вашему клиентскому секрету OAuth 2.0
-SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly']
+SCOPES = ['https://www.googleapis.com/auth/drive']
 REDIRECT_URI = "http://localhost:8000/callback"
 
 # Инициализация потока авторизации
@@ -90,7 +90,7 @@ def list_all_files(service, folder_id):
     results = service.files().list(
         q=query,
         pageSize=1000,
-        fields="nextPageToken, files(id, name, mimeType, owners, createdTime)"
+        fields="nextPageToken, files(id, name, mimeType, parents, owners, createdTime)"
     ).execute()
     items = results.get('files', [])
     while 'nextPageToken' in results:
@@ -98,7 +98,7 @@ def list_all_files(service, folder_id):
         results = service.files().list(
             q=query,
             pageSize=1000,
-            fields="nextPageToken, files(id, name, mimeType, owners, createdTime)",
+            fields="nextPageToken, files(id, name, mimeType, parents, owners, createdTime)",
             pageToken=page_token
         ).execute()
         items.extend(results.get('files', []))
@@ -196,5 +196,36 @@ def get_file_hierarchy(service, file_id):
         parents = file.get("parents")
         current_id = parents[0] if parents else None
     return hierarchy
+
+@app.post("/copy-files/{email}")
+async def copy_files(email: str):
+    credentials = load_credentials()
+    if not credentials or not credentials.valid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        service = build('drive', 'v3', credentials=credentials)
+
+        # Ищем все файлы, владельцем которых является email
+        query = f"'{email}' in owners and trashed = false"
+        response = service.files().list(q=query, fields="files(id, name, mimeType, parents)").execute()
+        files_to_copy = response.get('files', [])
+
+        for file in files_to_copy:
+            # Получаем родительскую папку
+            parent_ids = file.get('parents', [])
+            if not parent_ids:
+                continue
+            
+            copy_metadata = {
+                'name': file['name'],
+                'parents': parent_ids
+            }
+            service.files().copy(fileId=file['id'], body=copy_metadata).execute()
+
+        return JSONResponse({"message": "Files copied successfully"})
+    except Exception as e:
+        logger.error(f"Error copying files: {e}")
+        raise HTTPException(status_code=500, detail="Failed to copy files")
 
 # Запуск приложения: uvicorn main:app --reload
