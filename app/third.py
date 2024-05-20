@@ -17,6 +17,7 @@ from email.header import decode_header
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -217,6 +218,7 @@ def accept_invitation(email_id):
         wait.until(EC.number_of_windows_to_be(2))  # Ожидание открытия второй вкладки
         driver.switch_to.window(driver.window_handles[-1])  # Переключение на последнюю открытую вкладку
         logger.info("Switched to new tab.")
+        logger.info(f"2 window handles before switch: {driver.window_handles}")
         time.sleep(2)
 
         # Нахождение и нажатие кнопки "Responde" с использованием полного XPATH
@@ -226,16 +228,16 @@ def accept_invitation(email_id):
         time.sleep(10)
 
         # Ожидание открытия новой вкладки и переключение на неё
-        wait.until(EC.number_of_windows_to_be(2))  # Ожидание открытия новой вкладки
+        wait.until(EC.number_of_windows_to_be(3))  # Ожидание открытия новой вкладки
+        logger.info(f"All window handles before switch: {driver.window_handles}")
         driver.switch_to.window(driver.window_handles[-1])  # Переключение на последнюю открытую вкладку
-        logger.info("Switched to new tab after clicking 'Responde'.")
-        time.sleep(2)
+        logger.info(f"Current window handle after switch: {driver.current_window_handle}")
+        time.sleep(5)
 
-        # Нахождение и нажатие кнопки "Done" с использованием полного XPATH
-        done_button = wait.until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[3]/div/div[2]/span/c-wiz/div/div/div/div/c-wiz/div/div/div/div/div/div/div[2]/div/div[2]/div/div[2]/div/div/div/div[3]/div/div/div[2]/div/div[2]/button[3]/span[5]')))
-        done_button.click()
-        logger.info("Clicked the 'Done' button.")
-        time.sleep(2)
+
+        actions = ActionChains(driver)
+        actions.send_keys(Keys.RETURN).perform()
+        print("Pressed the 'Enter' key.")
 
     except Exception as e:
         logger.error(f"An error occurred while accepting the invitation: {e}")
